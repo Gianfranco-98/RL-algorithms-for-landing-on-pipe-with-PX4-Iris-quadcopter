@@ -105,7 +105,7 @@ class DroneEnv(gym.Env):
                  )
         z_dist = (
                   self.controller_object.getPosition().z - 
-                  self.desired_pose.position.z
+                  (self.desired_pose.position.z + self.max_z_distance)
                  )
         observation = [
                        x_dist, 
