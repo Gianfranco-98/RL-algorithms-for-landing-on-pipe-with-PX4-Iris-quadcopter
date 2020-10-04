@@ -8,7 +8,7 @@
 import rospy
 
 # MAVROS msgs to use setpoints
-from geometry_msgs.msg import Point, PoseStamped, Twist, TwistStamped, Vector3
+from geometry_msgs.msg import Point, PoseStamped, Twist
 from sensor_msgs.msg import Imu
 from mavros_msgs.msg import *
 
@@ -91,8 +91,6 @@ class Drone_Controller:
         self.sp_vel.linear.x = 0
         self.sp_vel.linear.y = 0
         self.sp_vel.linear.z = 0
-        # Message for the actual local velocity of the drone
-        self.velocity = Point(0.0, 0.0, 0.0)
         # ---------------------------------------------------------
 
         #           Setpoint message for velocity control
@@ -102,9 +100,9 @@ class Drone_Controller:
         # Bitmask to use all
         self.sp_att.type_mask = int('00000000', 2)
         # Rate values [rads/second]
-        self.sp_att.body_rate.x = 0.02
-        self.sp_att.body_rate.y = 0.02
-        self.sp_att.body_rate.z = 0.02
+        self.sp_att.body_rate.x = 0.09
+        self.sp_att.body_rate.y = 0.09
+        self.sp_att.body_rate.z = 0.09
         # Initial thrust
         self.sp_att.thrust = 0.0
         # Initial orientation values [quaternion form]
@@ -146,10 +144,6 @@ class Drone_Controller:
     ## Get actual position
     def getPosition(self):
         return self.local_pos
-
-    ## Get actual velocity
-    def getVelocity(self):
-        return self.velocity
 
     ## Initialize velocity
     def initVelocity(self):
@@ -271,12 +265,6 @@ class Drone_Controller:
         self.local_pos.x = msg.pose.position.x
         self.local_pos.y = msg.pose.position.y
         self.local_pos.z = msg.pose.position.z 
-
-    ## velocity callback
-    def velCb(self, msg):
-        self.velocity.x = msg.velocity.x
-        self.velocity.y = msg.velocity.y
-        self.velocity.z = msg.velocity.z
 
     ## Drone State callback
     def stateCb(self, msg):
