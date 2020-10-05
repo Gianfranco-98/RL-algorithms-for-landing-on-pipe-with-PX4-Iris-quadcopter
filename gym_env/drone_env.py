@@ -3,9 +3,15 @@
 # ___________________________________________________ Libraries ___________________________________________________ #
 
 
+import time
+from collections import namedtuple
+import math
 from math import sqrt
+from decimal import *
 
 import gym
+import numpy as np
+import rospy
 from geometry_msgs.msg import Pose
 from gym import spaces, utils
 from gym.envs.registration import register
@@ -20,6 +26,12 @@ episodeBound = 500
 
 # HARD CODING - PIPE AT PREDEFINED LOCATION
 PIPE16_LOC = [1.73, -1.46, 1.86]
+
+# HYPERPARAMETERS
+MAX_X_DIST = 1.0
+MAX_Y_DIST = 0.5
+MAX_Z_DIST = 0.2
+VELOCITY_VALUE = 0.1
 
 
 # _____________________________________________ Classes and Functions _____________________________________________ #
@@ -42,26 +54,25 @@ class DroneEnv(gym.Env):
         self.desired_pose.position.x = PIPE16_LOC[0]
         self.desired_pose.position.y = PIPE16_LOC[1]
         self.desired_pose.position.z = PIPE16_LOC[2]    
-        self.max_x_distance = 1.0
-        self.max_y_distance = 0.5
-        self.max_z_distance = 0.2
+        self.max_x_distance = MAX_X_DIST
+        self.max_y_distance = MAX_Y_DIST
+        self.max_z_distance = MAX_Z_DIST
+        self.vel_value = VELOCITY_VALUE
         self.episodeSteps = 0
-        self.reset_number = 0
-        self.vel_value = 0.1
 
         self.controller_object = Drone_Controller()
 
         # Action definition
         #   1. vel_y +
         #   2. vel_y -
-        #   3. vel_y /
+        #   3. vel_y 0
         self.action_space = spaces.Discrete(3)
 
         # Observation definition
         high = np.array([
-                         np.finfo(np.float).max,    # x_drone_pose - x_des_pose
-                         np.finfo(np.float).max,    # y_drone_pose - y_des_pose
-                         np.finfo(np.float).max     # z_drone_pose - z_des_pose
+                         self.max_x_distance,    # x_drone_pose - x_des_pose
+                         self.max_y_distance,    # y_drone_pose - y_des_pose
+                         self.max_z_distance     # z_drone_pose - z_des_pose
                        ])
         self.observation_space = spaces.Box(-high, high)
 
@@ -77,16 +88,8 @@ class DroneEnv(gym.Env):
         # Reset episode steps
         self.episodeSteps = 0
 
-        # Arm the drone if disarmed
-        self.controller_object.armDrone()
-
-        # If this is the first reset, the drone must reach the pipe on point [1.63, -1.46, 3.0]. Otherwise, it must reposition on a point
-        # convenient to repeat learning 
-        self.reset_number += 1
-        if self.reset_number == 1:
-            self.controller_object.reachPipe()
-        else:
-            self.controller_object.reposition()
+        # Reach episode starting point
+        self.controller_object.reachPipe()
         
         # Get observation 
         x_dist = (
@@ -130,8 +133,8 @@ class DroneEnv(gym.Env):
                                                    0,
                                                    -self.vel_value
                                                   ) 
-        elif action == 2:   # vel_y /
-            #print("\nvel_y /")
+        elif action == 2:   # vel_y 0
+            #print("\nvel_y 0")
             self.controller_object.controlVelocity(
                                                    0,
                                                    0
@@ -160,14 +163,6 @@ class DroneEnv(gym.Env):
         x_drone_distance = observation[0]
         y_drone_distance = observation[1]
         z_drone_distance = observation[2]
-        #print("[", x_drone_distance, "|", y_drone_distance, "|", z_drone_distance, "]")
-        norm_distance = sqrt(
-                             # at first it doesn't consider x_pose
-                             #pow(x_drone_distance, 2) +
-                             pow(y_drone_distance, 2) +
-                             pow(z_drone_distance, 2)
-                            )
-
         
         # Calculating reward and done
 
@@ -184,16 +179,9 @@ class DroneEnv(gym.Env):
            done = True
 
         if not done:
-            # NEED TO BE IMPROVED
-            reward = 1/(pow(norm_distance, 2))
-            """x_pos = self.controller_object.getPosition().x
-            y_pos = self.controller_object.getPosition().y
-            z_pos = self.controller_object.getPosition().z
-            print("[x|y|z] = [", x_pos, "|", y_pos, "|", z_pos, "] -> ", reward)"""
-        elif z_drone_distance < 0 and abs(y_drone_distance) <= 0.05:
-            print("VERY GOOD!")
-            reward = 10000
-        else: 
+            reward = 1/(abs(y_drone_distance) + 0.001) # 0.001 to not diverge
+        elif z_drone_distance < 0 and abs(y_drone_distance) < self.max_y_distance: 
             reward = 0
-        
+        else:
+            reward = -100
         return observation, reward, done, {}

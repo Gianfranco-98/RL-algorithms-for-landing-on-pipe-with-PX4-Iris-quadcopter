@@ -9,14 +9,13 @@ import rospy
 
 # MAVROS msgs to use setpoints
 from geometry_msgs.msg import Point, PoseStamped, Twist
-from sensor_msgs.msg import Imu
 from mavros_msgs.msg import *
 
 # MAVROS srv to change modes 
 from mavros_msgs.srv import *
 
 # Math functions
-from math import sin,cos,sqrt
+from math import sin, cos, sqrt
 import numpy as np
 
 
@@ -28,9 +27,6 @@ PIPE16_LOC = [1.73, -1.46, 1.86]
 
 # Ideal repositioning altitude
 ALTITUDE = 3.0
-
-# Thrust to go up slowly
-THRUST = 0.60
 
 
 # ____________________________________________________ Classes ____________________________________________________ #
@@ -68,51 +64,18 @@ class Drone_Controller:
         # ---------------------------------------------------------
         ## Message
         self.sp_pos = PositionTarget()
-        ## Bitmask to use only Position control
-        self.sp_pos.type_mask = int('111111111000', 2)
+        ## Bitmask to use only Position and Yaw control
+        self.sp_pos.type_mask = int('101111111000', 2)
         ## Coordinate system: LOCAL_NED
         self.sp_pos.coordinate_frame = 1
-        ## Initial position values
-        self.sp_pos.position.x = 0.0
-        self.sp_pos.position.y = 0.0
-        self.sp_pos.position.z = 0.0
         # Message for the actual local position of the drone
         self.local_pos = Point(0.0, 0.0, 0.0)
         # ---------------------------------------------------------
 
         #           Setpoint message for velocity control
         # ---------------------------------------------------------
-        ## Message
         self.sp_vel = Twist()
-        ## Initial velocity values
-        self.sp_vel.angular.x = 0
-        self.sp_vel.angular.y = 0
-        self.sp_vel.angular.z = 0
-        self.sp_vel.linear.x = 0
-        self.sp_vel.linear.y = 0
-        self.sp_vel.linear.z = 0
         # ---------------------------------------------------------
-
-        #           Setpoint message for velocity control
-        # ---------------------------------------------------------
-        # Message
-        self.sp_att = AttitudeTarget()
-        # Bitmask to use all
-        self.sp_att.type_mask = int('00000000', 2)
-        # Rate values [rads/second]
-        self.sp_att.body_rate.x = 0.09
-        self.sp_att.body_rate.y = 0.09
-        self.sp_att.body_rate.z = 0.09
-        # Initial thrust
-        self.sp_att.thrust = 0.0
-        # Initial orientation values [quaternion form]
-        self.sp_att.orientation.x = 0.0
-        self.sp_att.orientation.y = 0.0
-        self.sp_att.orientation.z = 0.0
-        self.sp_att.orientation.w = 0.0
-
-        # ---------------------------------------------------------
-
 
         # Drone state
         self.state = State()
@@ -128,9 +91,6 @@ class Drone_Controller:
 
         # Setpoint_velocity publisher for velocity control
         self.sp_vel_pub = rospy.Publisher('mavros/setpoint_velocity/cmd_vel_unstamped', Twist, queue_size=10)
-
-        # Setpoint_raw attitude publisher
-        self.sp_att_pub = rospy.Publisher('mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
 
         # Subscribe to drone state
         rospy.Subscriber('mavros/state', State, self.stateCb)   
@@ -161,11 +121,6 @@ class Drone_Controller:
         self.sp_raw_pub.publish(self.sp_pos)
         self.rate.sleep()
 
-    ## Publish target attitude
-    def pubAttitude(self):
-        self.sp_att_pub.publish(self.sp_att)
-        self.rate.sleep()
-
     ## Arm the drone if not armed
     def armDrone(self):
         if not self.state.armed:
@@ -194,36 +149,19 @@ class Drone_Controller:
         else:
             return False
 
-    ## Return true if x and y poses have been reached
-    def pipe_reached(self):
-        if self.x_reached() == True and self.y_reached() == True:
-            return True
-        else:
-            return False  
-
-    ## Return true if drone is repositioned to learn
-    def repositioned(self):
-        if (
-            self.local_pos.x > PIPE16_LOC[0]-1 and self.local_pos.x < PIPE16_LOC[0]+1 and
-            self.local_pos.y > PIPE16_LOC[1]-0.5 and self.local_pos.y < PIPE16_LOC[1]+0.5 and
-            self.local_pos.z > PIPE16_LOC[2]+1 and self.local_pos.z < ALTITUDE + 0.5
-            ):
+    ## Return true if z pose has been reached (+0.5 tolerance)
+    def z_reached(self):
+        if self.local_pos.z > PIPE16_LOC[2]+1.0:
             return True
         else:
             return False
 
-    ## Attitude control function
-    def controlAttitude(self, thrust, angle, versor):
-        norm_versor = sqrt(versor[0]*versor[0] + versor[1]*versor[1] + versor[2]*versor[2])
-        self.sp_att.header.seq += 1
-        self.sp_att.header.stamp = rospy.Time.now()
-        self.sp_att.header.frame_id = "controlAttitude"
-        self.sp_att.thrust = thrust
-        self.sp_att.orientation.x = sin(angle/2)*versor[0]/norm_versor
-        self.sp_att.orientation.y = sin(angle/2)*versor[1]/norm_versor
-        self.sp_att.orientation.z = sin(angle/2)*versor[2]/norm_versor
-        self.sp_att.orientation.w = cos(angle/2)
-        self.pubAttitude()
+    ## Return true if x and y poses have been reached
+    def pipe_reached(self):
+        if self.x_reached() and self.y_reached() and self.z_reached():
+            return True
+        else:
+            return False  
 
     ## Velocity control function
     def controlVelocity(self, x_value, y_value):
@@ -239,20 +177,13 @@ class Drone_Controller:
         self.sp_pos.position.x = PIPE16_LOC[0]
         self.sp_pos.position.y = PIPE16_LOC[1]
         self.sp_pos.position.z = ALTITUDE
+        self.sp_pos.yaw = 0
         self.pubPosition()
 
     ## Reach the pipe from start point
     def reachPipe(self):
         while not self.pipe_reached():
             self.controlPosition()
-
-    ## Reposition on pipe
-    def reposition(self):
-        while not self.repositioned():
-            self.controlPosition()
-            versor = [0.0, 0.0, 1.0]
-            angle = 0
-            self.controlAttitude(THRUST, angle, versor)
 
     # ___________________________________________ 
 
