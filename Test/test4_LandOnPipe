@@ -1,0 +1,177 @@
+#!/usr/bin/env python
+
+import rospy
+from geometry_msgs.msg import Point, PoseStamped
+from mavros_msgs.msg import *
+from mavros_msgs.srv import *
+
+# HARD CODING - PIPE AT PREDEFINED LOCATION
+PIPE16_LOC = [1.63, -1.46, 1.86]
+
+# Fixed Altitude
+ALTITUDE = 3
+
+class Drone_Modes:
+
+    def __init__(self):
+        pass
+
+    def setArm(self):
+        rospy.wait_for_service('mavros/cmd/arming')
+        try:
+            armService = rospy.ServiceProxy('mavros/cmd/arming', 
+                                             mavros_msgs.srv.CommandBool)
+            armService(True)
+        except rospy.ServiceException as e:
+            print("srv mavros/cmd/arming call failed: %s"%e)
+
+    def setTakeoff(self):
+    	rospy.wait_for_service('mavros/cmd/takeoff')
+    	try:
+    		takeoffService = rospy.ServiceProxy('mavros/cmd/takeoff', 
+                                                 mavros_msgs.srv.CommandTOL)
+    		takeoffService(altitude = ALTITUDE)
+    	except rospy.ServiceException as e:
+    		print("srv mavros/cmd/takeoff call failed: %s"%e)
+
+    def setOffboardMode(self):
+        rospy.wait_for_service('mavros/set_mode')
+        try:
+            flightModeService = rospy.ServiceProxy('mavros/set_mode', 
+                                                    mavros_msgs.srv.SetMode)
+            flightModeService(custom_mode='OFFBOARD')
+        except rospy.ServiceException as e:
+            print("srv set_mode call failed: %s. Offboard Mode could not be set."%e)
+
+    def setAutoLandMode(self):
+        rospy.wait_for_service('mavros/set_mode')
+        try:
+            flightModeService = rospy.ServiceProxy('mavros/set_mode', mavros_msgs.srv.SetMode)
+            flightModeService(custom_mode='AUTO.LAND')
+        except rospy.ServiceException as e:
+            print("service set_mode call failed: %s. Autoland Mode could not be set."%e)
+
+
+
+# Controller class
+class Controller:
+
+    # initialization method
+    def __init__(self):
+
+        #           Setpoint message for position control
+        # ---------------------------------------------------------
+        ## Message
+        self.sp_pos = PositionTarget()
+        ## Bitmask to use only Position Control
+        self.sp_pos.type_mask = int('101111111000', 2)
+        ## Coordinate system: LOCAL_NED
+        self.sp_pos.coordinate_frame = 1
+        ## Initial position
+        self.sp_pos.position.x = 0.0
+        self.sp_pos.position.y = 0.0
+        self.sp_pos.position.z = ALTITUDE
+        # Message for the actual local position of the drone
+        self.local_pos = Point(0.0, 0.0, 0.0)
+        # ---------------------------------------------------------
+
+        # Other attributes
+        self.state = State()
+        self.modes = Drone_Modes()
+        self.rate = rospy.Rate(20)
+
+        # Publish drone's position
+        self.sp_raw_pub = rospy.Publisher('mavros/setpoint_raw/local', PositionTarget, queue_size=10)
+        
+        # Subscribe to drone's local position
+        rospy.Subscriber('mavros/local_position/pose', PoseStamped, self.posCb)
+        
+        # Subscribe to drone's state
+        rospy.Subscriber('mavros/state', State, self.stateCb)
+
+
+    # ____________ Utility functions____________
+
+    ## return true if x_pose has been reached
+    def x_reached(self):
+        if self.local_pos.x > PIPE16_LOC[0]-2 and 
+           self.local_pos.x < PIPE16_LOC[0]+2:
+            return True
+        else:
+            return False
+
+    ## return true if y_pose has been reached
+    def y_reached(self):
+        if self.local_pos.y > PIPE16_LOC[1]-0.02 and 
+           self.local_pos.y < PIPE16_LOC[1]+0.02:
+            return True
+        else:
+            return False
+
+    ## return true if pipe has been reached
+    def pipe_reached(self):
+        if self.x_reached() == True and self.y_reached() == True:
+            return True
+        else:
+            return False    
+    
+    ## position drone on pipe
+    def reachPipe(self):
+        self.sp.position.x = PIPE16_LOC[0]
+        self.sp.position.y = PIPE16_LOC[1]
+
+    ## Arm the drone if not armed
+    def armDrone(self):
+        if not self.state.armed:
+            while not self.state.armed:
+                self.modes.setArm()
+                self.rate.sleep()
+
+    ## Activate OFFBOARD Mode by sending a few setpoints
+    def activateOffboard(self):
+        for _ in range(10):
+            self.sp_raw_pub.publish(self.sp_pos)
+            self.rate.sleep()
+        self.modes.setOffboardMode()
+
+    # ___________________________________________ 
+
+
+
+    # ____________ Callback functions ____________ 
+
+    ## local position callback
+    def posCb(self, msg):
+        self.local_pos.x = msg.pose.position.x
+        self.local_pos.y = msg.pose.position.y
+        self.local_pos.z = msg.pose.position.z            
+
+    ## Drone State callback
+    def stateCb(self, msg):
+        self.state = msg
+
+    # ___________________________________________ 
+
+
+# Main function
+def main():
+
+    rospy.init_node('LandOnPipe_Node', anonymous=True)
+    cnt = Controller()
+
+    # ROS main loop
+    while not rospy.is_shutdown():
+        print("Actual pose: [", cnt.local_pos.x, cnt.local_pos.y, cnt.local_pos.z, "]")
+        if cnt.pipe_reached() == True:
+            print("\n\n\n____Positioned!____\n\n\n")
+            print("Landing on pipe...")
+            cnt.modes.setAutoLandMode()
+        cnt.reachPipe()
+        cnt.sp_raw_pub.publish(cnt.sp)
+        cnt.rate.sleep()
+
+if __name__ == '__main__':
+	try:
+		main()
+	except rospy.ROSInterruptException:
+		pass
