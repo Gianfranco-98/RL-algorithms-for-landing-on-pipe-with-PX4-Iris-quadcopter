@@ -184,13 +184,6 @@ class DroneEnv(gym.Env):
            ):
            done = True
 
-        #if not done:
-        #    reward = 1/(abs(y_drone_distance) + 0.1*abs(z_drone_distance)) 
-        #elif z_drone_distance <= 0 and abs(y_drone_distance) <= GOOD_Y_INTERVAL: 
-        #    reward = 0
-        #else:
-        #    reward = -2000
-
         reward = 1/(abs(y_drone_distance) + 0.1*abs(z_drone_distance)) if not done else 0
 
         return observation, reward, done, {}
