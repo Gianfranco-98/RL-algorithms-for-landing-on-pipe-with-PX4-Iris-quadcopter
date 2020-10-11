@@ -41,19 +41,15 @@ PIPE16_LOC = [1.73, -1.46, 1.86]
 # Learning parameters
 GAMMA = 0.99
 BATCH_SIZE = 128
-REPLAY_BUFFER_SIZE = 100000
-LEARNING_RATE = 1e-4
+REPLAY_BUFFER_SIZE = 30000
+LEARNING_RATE = 0.01
 SYNC_TARGET_ITERS = 1000
-REPLAY_BUFFER_START_SIZE = 10000
-EPSILON_DECAY_LAST_ITER = 100000
+REPLAY_BUFFER_START_SIZE = 5000
+EPSILON_DECAY_LAST_ITER = 40000
 EPSILON_START = 1.0
-EPSILON_FINAL = 0.01
-MEAN_REWARD_BOUND = 100000
+EPSILON_FINAL = 0.05
+MEAN_REWARD_BOUND = 5000
 DOUBLE_DQN_ACTIVE = True
-
-# Held-out states
-STATES_TO_EVALUATE = 1000
-EVAL_EVERY_FRAME = 100
 
 # Gym Environment parameters
 ENV_NAME = "IndustrialDrone-v0"
@@ -196,7 +192,7 @@ def main():
     net = net.float()
     tgt_net = tgt_net.float()
 
-    writer = SummaryWriter(log_dir='/home/gianfranco/Firmware/script/DQN/Double_Dueling_DQN/runs', comment="-" + ENV_NAME)
+    writer = SummaryWriter(comment="-" + ENV_NAME)
 
     buffer = ExperienceBuffer(REPLAY_BUFFER_SIZE)
     agent = Agent(env, buffer)
@@ -227,9 +223,8 @@ def main():
             writer.add_scalar("reward_100", m_reward, iterations)
             writer.add_scalar("reward", reward, iterations)
             if best_m_reward is None or best_m_reward < m_reward:
-            #    Uncommenting, we save net weights and best rewards
-            #    torch.save(net.state_dict(), args.env +
-            #               "-best_%.0f.dat" % m_reward)
+                torch.save(net.state_dict(), ENV_NAME +
+                           "-best_%.0f.dat" % m_reward)
                 if best_m_reward is not None:
                     print("Best reward updated %.3f -> %.3f" % (
                         best_m_reward, m_reward))
@@ -240,13 +235,6 @@ def main():
                 
         if len(buffer) < REPLAY_BUFFER_START_SIZE:
             continue
-
-        if eval_states is None:
-            eval_states_pool = buffer.sample(STATES_TO_EVALUATE)
-            eval_states = eval_states_pool[0]
-            print(eval_states)
-            #eval_states = [np.array(transition.state, copy=False) for transition in eval_states]
-            #eval_states = np.array(eval_states, copy=False)
 
         # Optimization
         optimizer.zero_grad()
@@ -259,11 +247,6 @@ def main():
         if iterations % SYNC_TARGET_ITERS == 0:
             tgt_net.load_state_dict(net.state_dict())
 
-        if iterations % EVAL_EVERY_FRAME == 0:
-            mean_val = calc_values_of_states(eval_states, net, device=device)
-            writer.add_scalar("values mean", mean_val, iterations)
-
-    env.close()
     writer.close()
 
 
