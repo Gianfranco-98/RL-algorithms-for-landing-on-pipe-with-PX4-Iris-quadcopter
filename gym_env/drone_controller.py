@@ -163,6 +163,21 @@ class Drone_Controller:
         else:
             return False  
 
+    def under_pipe(self):
+        if self.local_pos.y > PIPE16_LOC[1]-0.3 and self.local_pos.y < PIPE16_LOC[1]+0.3 and self.local_pos.z < PIPE16_LOC[2]: 
+            return True
+        else:
+            return False
+
+    def escapePipe(self):
+        if self.under_pipe():
+            while self.under_pipe():
+                if self.local_pos.y < PIPE16_LOC[1]:
+                    self.sp.position.y = PIPE16_LOC[1] - 1
+                else:
+                    self.sp.position.y = PIPE16_LOC[1] + 1        
+                self.sp.position.z = PIPE16_LOC[2] / 2
+
     ## Velocity control function
     def controlVelocity(self, x_value, y_value):
         self.sp_vel.linear.x = x_value

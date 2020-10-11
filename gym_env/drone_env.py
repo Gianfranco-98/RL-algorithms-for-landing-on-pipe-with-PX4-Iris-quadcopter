@@ -28,6 +28,7 @@ episodeBound = 500
 PIPE16_LOC = [1.73, -1.46, 1.86]
 
 # HYPERPARAMETERS
+GOOD_Y_INTERVAL = 0.05
 MAX_X_DIST = 1.0
 MAX_Y_DIST = 0.5
 MAX_Z_DIST = 0.2
@@ -88,6 +89,9 @@ class DroneEnv(gym.Env):
         # Reset episode steps
         self.episodeSteps = 0
 
+        # Prevent to get stucked
+        self.controller_object.escapePipe()
+
         # Reach episode starting point
         self.controller_object.reachPipe()
         
@@ -105,9 +109,9 @@ class DroneEnv(gym.Env):
                   (self.desired_pose.position.z + self.max_z_distance)
                  )
         observation = [
-                       x_dist, 
-                       y_dist,
-                       z_dist
+                       round(x_dist, 4),
+                       round(y_dist, 4),
+                       round(z_dist, 4)
                       ]
 
         # Initialize velocity
@@ -118,6 +122,8 @@ class DroneEnv(gym.Env):
 
     def step(self, action):
 
+        # Prevent to get stucked
+        self.controller_object.escapePipe()
 
         # Action select
 
@@ -156,9 +162,9 @@ class DroneEnv(gym.Env):
                   (self.desired_pose.position.z + self.max_z_distance)
                  )
         observation = [
-                       x_dist, 
-                       y_dist,
-                       z_dist
+                       round(x_dist, 4),
+                       round(y_dist, 4),
+                       round(z_dist, 4)
                       ]                            
         x_drone_distance = observation[0]
         y_drone_distance = observation[1]
@@ -169,19 +175,22 @@ class DroneEnv(gym.Env):
         done = False
         reward = 0.0
         self.episodeSteps += 1
-    
+
         if (
             abs(x_drone_distance) > self.max_x_distance or 
             abs(y_drone_distance) > self.max_y_distance or 
-            z_drone_distance < 0 or 
+            z_drone_distance <= 0 or 
             self.episodeSteps > episodeBound
            ):
            done = True
 
-        if not done:
-            reward = 1/(abs(y_drone_distance) + 0.001) # 0.001 to not diverge
-        elif z_drone_distance < 0 and abs(y_drone_distance) < self.max_y_distance: 
-            reward = 0
-        else:
-            reward = -100
+        #if not done:
+        #    reward = 1/(abs(y_drone_distance) + 0.1*abs(z_drone_distance)) 
+        #elif z_drone_distance <= 0 and abs(y_drone_distance) <= GOOD_Y_INTERVAL: 
+        #    reward = 0
+        #else:
+        #    reward = -2000
+
+        reward = 1/(abs(y_drone_distance) + 0.1*abs(z_drone_distance)) if not done else 0
+
         return observation, reward, done, {}
