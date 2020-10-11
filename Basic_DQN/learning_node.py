@@ -48,14 +48,14 @@ PIPE16_LOC = [1.73, -1.46, 1.86]
 # Learning parameters
 GAMMA = 0.99
 BATCH_SIZE = 128
-REPLAY_BUFFER_SIZE = 100000
-LEARNING_RATE = 1e-4
+REPLAY_BUFFER_SIZE = 30000
+LEARNING_RATE = 0.01
 SYNC_TARGET_ITERS = 1000
-REPLAY_BUFFER_START_SIZE = 10000
-EPSILON_DECAY_LAST_ITER = 100000
+REPLAY_BUFFER_START_SIZE = 5000
+EPSILON_DECAY_LAST_ITER = 40000
 EPSILON_START = 1.0
-EPSILON_FINAL = 0.01
-MEAN_REWARD_BOUND = 100000
+EPSILON_FINAL = 0.05
+MEAN_REWARD_BOUND = 5000
 
 # Gym Environment parameters
 ENV_NAME = "IndustrialDrone-v0"
@@ -214,9 +214,8 @@ def main():
             writer.add_scalar("reward_100", m_reward, iterations)
             writer.add_scalar("reward", reward, iterations)
             if best_m_reward is None or best_m_reward < m_reward:
-            #    Uncommenting, we save net weights and best rewards
-            #    torch.save(net.state_dict(), args.env +
-            #               "-best_%.0f.dat" % m_reward)
+                torch.save(net.state_dict(), args.env +
+                           "-best_%.0f.dat" % m_reward)
                 if best_m_reward is not None:
                     print("Best reward updated %.3f -> %.3f" % (
                         best_m_reward, m_reward))
@@ -238,6 +237,7 @@ def main():
         writer.add_scalar("loss", loss_t, iterations)
         loss_t.backward()
         optimizer.step()
+	
     writer.close()
 
 
