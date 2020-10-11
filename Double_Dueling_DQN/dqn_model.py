@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-HIDDEN_SIZE = 128
+HIDDEN_SIZE = 64
 
 class DQN(nn.Module):
     def __init__(self, input_shape, n_actions):
