@@ -219,7 +219,7 @@ def main():
             writer.add_scalar("reward_100", mean_reward, iterations)
             writer.add_scalar("reward", reward, iterations)
             if best_mean_reward is None or best_mean_reward < mean_reward:
-            #    Uncommenting, we save net weights and best rewards in a PATH's file
+            #    Uncommenting, we save net weights in a PATH's file
             #    torch.save(net.state_dict(), PATH)
                 if best_mean_reward is not None:
                     print("Best reward updated %.3f -> %.3f" % (
